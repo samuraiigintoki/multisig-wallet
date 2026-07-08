@@ -49,7 +49,7 @@ contract MultiSigWalletTest is Test {
     function test_RevertOnZeroThreshold() public {
         uint256 zeroThreshold = 0;
         vm.expectRevert(MultiSigWallet.MultiSigWallet__ZeroThreshold.selector);
-        wallet = new MultiSigWallet(owners,zeroThreshold);
+        wallet = new MultiSigWallet(owners, zeroThreshold);
     }
 
     function test_RevertOnHighThreshold() public {
