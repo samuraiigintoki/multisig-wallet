@@ -57,4 +57,34 @@ contract MultiSigWalletTest is Test {
         vm.expectRevert(MultiSigWallet.MultiSigWallet__ThresholdTooHigh.selector);
         wallet = new MultiSigWallet(owners, highThreshold);
     }
+
+    function test_OwnerCanSubmitTransaction() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.prank(alice);
+        wallet.submitTransaction(to, value, data);
+
+        (address actualTo, uint256 actualValue, bytes memory actualData, bool actualExecuted) = wallet.transactions(0);
+
+        assertEq(actualTo, to);
+        assertEq(actualValue, value);
+        assertEq(actualData, data);
+        assertEq(actualExecuted, false);
+    }
+
+    function test_RevertWhenNonOwnerSubmits() public {
+        address nonOwner = makeAddr("NONOWNERADDRESS");
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.expectRevert("not owner");
+
+        vm.prank(nonOwner);
+        wallet.submitTransaction(to, value, data);
+    }
+
+    function test_TransactionStoredCorrectly() public {}
 }

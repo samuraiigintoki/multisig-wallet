@@ -35,3 +35,16 @@ submit → confirm → (optionally revoke) → execute
 ## Security note
 
 This design follows the Checks-Effects-Interactions (CEI) pattern in `executeTransaction` to prevent reentrancy on double-execution. The executed flag acts as a one-time guard per transaction index.
+
+## Submit flow — implementation note
+
+`submitTransaction` is the entry point to the lifecycle. It is owner-gated via the `onlyOwner` modifier (checks `isOwner[msg.sender]` — the same mapping populated during construction).
+
+When called, the function:
+1. Captures the current `transactions.length` as the transaction index.
+2. Pushes a `Transaction` struct (`to`, `value`, `data`, `executed = false`) into the `transactions` array.
+3. Emits `SubmitTransaction(msg.sender, txIndex, to, value, data)`.
+
+The struct's `executed` field starts `false`. It is not touched by `confirmTransaction` or `revokeConfirmation` — only `executeTransaction` flips it to `true` (and does so before the external call, per CEI).
+
+Transactions are indexed by their position in the array (`transactions[0]`, `transactions[1]`, ...). This index is how `confirmTransaction`, `revokeConfirmation`, and `executeTransaction` reference which transaction to operate on.
