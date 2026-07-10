@@ -17,7 +17,11 @@ contract MultiSigWallet {
     mapping(uint256 => mapping(address => bool)) public isConfirmed;
 
     event SubmitTransaction(
-        address indexed owner, uint256 indexed txIndex, address indexed to, uint256 value, bytes data
+        address indexed owner,
+        uint256 indexed txIndex,
+        address indexed to,
+        uint256 value,
+        bytes data
     );
     event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);
 
@@ -60,10 +64,16 @@ contract MultiSigWallet {
         _;
     }
 
-    function submitTransaction(address _to, uint256 _value, bytes calldata _data) external onlyOwner {
+    function submitTransaction(
+        address _to,
+        uint256 _value,
+        bytes calldata _data
+    ) external onlyOwner {
         uint256 txIndex = transactions.length;
 
-        transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false}));
+        transactions.push(
+            Transaction({to: _to, value: _value, data: _data, executed: false})
+        );
 
         emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
     }

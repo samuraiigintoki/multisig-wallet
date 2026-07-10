@@ -34,7 +34,9 @@ contract MultiSigWalletTest is Test {
 
     function test_RevertOnZeroOwners() public {
         address[] memory noOwners;
-        vm.expectRevert(MultiSigWallet.MultiSigWallet__EmptyOwnersArray.selector);
+        vm.expectRevert(
+            MultiSigWallet.MultiSigWallet__EmptyOwnersArray.selector
+        );
         wallet = new MultiSigWallet(noOwners, threshold);
     }
 
@@ -54,7 +56,9 @@ contract MultiSigWalletTest is Test {
 
     function test_RevertOnHighThreshold() public {
         uint256 highThreshold = 5;
-        vm.expectRevert(MultiSigWallet.MultiSigWallet__ThresholdTooHigh.selector);
+        vm.expectRevert(
+            MultiSigWallet.MultiSigWallet__ThresholdTooHigh.selector
+        );
         wallet = new MultiSigWallet(owners, highThreshold);
     }
 
@@ -66,7 +70,12 @@ contract MultiSigWalletTest is Test {
         vm.prank(alice);
         wallet.submitTransaction(to, value, data);
 
-        (address actualTo, uint256 actualValue, bytes memory actualData, bool actualExecuted) = wallet.transactions(0);
+        (
+            address actualTo,
+            uint256 actualValue,
+            bytes memory actualData,
+            bool actualExecuted
+        ) = wallet.transactions(0);
 
         assertEq(actualTo, to);
         assertEq(actualValue, value);
@@ -107,7 +116,9 @@ contract MultiSigWalletTest is Test {
         vm.startPrank(alice);
         wallet.submitTransaction(to, value, data);
         wallet.confirmTransaction(0);
-        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyConfirmed.selector);
+        vm.expectRevert(
+            MultiSigWallet.MultiSigWallet__TxAlreadyConfirmed.selector
+        );
         wallet.confirmTransaction(0);
         vm.stopPrank();
     }
@@ -138,7 +149,9 @@ contract MultiSigWalletTest is Test {
 
         vm.store(address(wallet), slot, bytes32(uint256(1)));
 
-        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector);
+        vm.expectRevert(
+            MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector
+        );
         vm.prank(alice);
         wallet.confirmTransaction(0);
     }
