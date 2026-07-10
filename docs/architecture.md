@@ -1,4 +1,4 @@
-# MultiSigWallet — Architecture Flow
+# MultiSigWallet - Architecture Flow
 
 ## How it works (4-step lifecycle)
 
@@ -36,6 +36,7 @@ submit → confirm → (optionally revoke) → execute
 
 This design follows the Checks-Effects-Interactions (CEI) pattern in `executeTransaction` to prevent reentrancy on double-execution. The executed flag acts as a one-time guard per transaction index.
 
+
 ## Submit flow — implementation note
 
 `submitTransaction` is the entry point to the lifecycle. It is owner-gated via the `onlyOwner` modifier (checks `isOwner[msg.sender]` — the same mapping populated during construction).
@@ -48,3 +49,26 @@ When called, the function:
 The struct's `executed` field starts `false`. It is not touched by `confirmTransaction` or `revokeConfirmation` — only `executeTransaction` flips it to `true` (and does so before the external call, per CEI).
 
 Transactions are indexed by their position in the array (`transactions[0]`, `transactions[1]`, ...). This index is how `confirmTransaction`, `revokeConfirmation`, and `executeTransaction` reference which transaction to operate on.
+
+## Confirm flow — implementation note
+
+`confirmTransaction(uint256 _txIndex)` is owner-gated via the existing `onlyOwner` modifier. It does three checks before recording a confirmation:
+
+1. **Bounds** — `_txIndex >= transactions.length` → revert `TxDoesNotExist`.
+2. **Duplicate-action prevention** — `isConfirmed[_txIndex][msg.sender] == true` → revert `TxAlreadyConfirmed`. This is the per-transaction per-owner idempotency guard. It prevents the same owner from inflating the confirmation count.
+3. **Executed guard** — `transactions[_txIndex].executed == true` → revert `TxAlreadyExecuted`. Confirming a finalized transaction is a no-op with security implications (it could mask a race condition if execute were somehow bypassed).
+
+The confirmation is recorded as `isConfirmed[_txIndex][msg.sender] = true` — a nested mapping (`mapping(uint256 => mapping(address => bool))`). This gives O(1) lookup for both "has owner X confirmed tx Y?" and "how many owners confirmed tx Y?" (derived by iterating owners or by maintaining a separate count mapping — the count is a derived value, not primary state).
+
+No ETH moves in `confirmTransaction`. The event `ConfirmTransaction(owner, txIndex)` is emitted after the state write.
+
+## Duplicate-action prevention — design note
+
+The multisig lifecycle has two distinct places where duplicate-action prevention matters:
+
+- **Constructor**: duplicate owners are rejected at deploy time (`DuplicateOwner`).
+- **Confirm flow**: the `isConfirmed` nested mapping rejects a second confirmation by the same owner for the same transaction.
+
+Without the confirm-flow guard, an owner could call `confirmTransaction` twice on the same tx, inflating the confirmation count without having called `revokeConfirmation` in between. The count would appear to meet the threshold when it shouldn't. This is the same class of bug as reentrancy and unidirectional token accounting — an action that should happen once happening more than once because state is not checked before the effect.
+
+`revokeConfirmation` (future day) will unset `isConfirmed[_txIndex][msg.sender]` and must also be guarded against: cannot revoke if not confirmed, and cannot revoke after execution.

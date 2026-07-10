@@ -86,5 +86,60 @@ contract MultiSigWalletTest is Test {
         wallet.submitTransaction(to, value, data);
     }
 
-    function test_TransactionStoredCorrectly() public {}
+    function test_OwnerConfirmsSubmittedTx() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        assertEq(wallet.isConfirmed(0, alice), true);
+    }
+
+    function test__DuplicateConfirmReverts() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyConfirmed.selector);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+    }
+
+    function test_NonOwnerConfirmReverts() public {
+        address nonOwner = makeAddr("NONOWNERADDRESS");
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.prank(alice);
+        wallet.submitTransaction(to, value, data);
+
+        vm.expectRevert("not owner");
+        vm.prank(nonOwner);
+        wallet.confirmTransaction(0);
+    }
+
+    function test_ExecutedTxCannotBeConfirmed() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.prank(alice);
+        wallet.submitTransaction(to, value, data);
+
+        bytes32 slot = bytes32(uint256(keccak256(abi.encode(uint256(0)))) + 3);
+
+        vm.store(address(wallet), slot, bytes32(uint256(1)));
+
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector);
+        vm.prank(alice);
+        wallet.confirmTransaction(0);
+    }
 }

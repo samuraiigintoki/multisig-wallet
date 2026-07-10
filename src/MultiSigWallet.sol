@@ -14,15 +14,20 @@ contract MultiSigWallet {
     uint256 public threshold;
 
     mapping(address => bool) public isOwner;
+    mapping(uint256 => mapping(address => bool)) public isConfirmed;
 
     event SubmitTransaction(
         address indexed owner, uint256 indexed txIndex, address indexed to, uint256 value, bytes data
     );
+    event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);
 
     error MultiSigWallet__EmptyOwnersArray();
     error MultiSigWallet__DuplicateOwner();
     error MultiSigWallet__ZeroThreshold();
     error MultiSigWallet__ThresholdTooHigh();
+    error MultiSigWallet__TxDoesNotExist();
+    error MultiSigWallet__TxAlreadyConfirmed();
+    error MultiSigWallet__TxAlreadyExecuted();
 
     constructor(address[] memory _owners, uint256 _threshold) {
         // Zero owners check
@@ -61,5 +66,23 @@ contract MultiSigWallet {
         transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false}));
 
         emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
+    }
+
+    function confirmTransaction(uint256 _txIndex) external onlyOwner {
+        if (_txIndex >= transactions.length) {
+            revert MultiSigWallet__TxDoesNotExist();
+        }
+
+        if (isConfirmed[_txIndex][msg.sender]) {
+            revert MultiSigWallet__TxAlreadyConfirmed();
+        }
+
+        if (transactions[_txIndex].executed) {
+            revert MultiSigWallet__TxAlreadyExecuted();
+        }
+
+        isConfirmed[_txIndex][msg.sender] = true;
+
+        emit ConfirmTransaction(msg.sender, _txIndex);
     }
 }
