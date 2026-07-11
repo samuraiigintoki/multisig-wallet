@@ -1,0 +1,205 @@
+[1mdiff --git a/src/MultiSigWallet.sol b/src/MultiSigWallet.sol[m
+[1mindex ca3398e..dad9a18 100644[m
+[1m--- a/src/MultiSigWallet.sol[m
+[1m+++ b/src/MultiSigWallet.sol[m
+[36m@@ -17,13 +17,10 @@[m [mcontract MultiSigWallet {[m
+     mapping(uint256 => mapping(address => bool)) public isConfirmed;[m
+ [m
+     event SubmitTransaction([m
+[31m-        address indexed owner,[m
+[31m-        uint256 indexed txIndex,[m
+[31m-        address indexed to,[m
+[31m-        uint256 value,[m
+[31m-        bytes data[m
+[32m+[m[32m        address indexed owner, uint256 indexed txIndex, address indexed to, uint256 value, bytes data[m
+     );[m
+     event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);[m
+[32m+[m[32m    event RevokeConfirmation(address indexed owner, uint256 indexed txIndex);[m
+ [m
+     error MultiSigWallet__EmptyOwnersArray();[m
+     error MultiSigWallet__DuplicateOwner();[m
+[36m@@ -32,6 +29,7 @@[m [mcontract MultiSigWallet {[m
+     error MultiSigWallet__TxDoesNotExist();[m
+     error MultiSigWallet__TxAlreadyConfirmed();[m
+     error MultiSigWallet__TxAlreadyExecuted();[m
+[32m+[m[32m    error MultiSigWallet__TxNotConfirmed();[m
+ [m
+     constructor(address[] memory _owners, uint256 _threshold) {[m
+         // Zero owners check[m
+[36m@@ -64,16 +62,10 @@[m [mcontract MultiSigWallet {[m
+         _;[m
+     }[m
+ [m
+[31m-    function submitTransaction([m
+[31m-        address _to,[m
+[31m-        uint256 _value,[m
+[31m-        bytes calldata _data[m
+[31m-    ) external onlyOwner {[m
+[32m+[m[32m    function submitTransaction(address _to, uint256 _value, bytes calldata _data) external onlyOwner {[m
+         uint256 txIndex = transactions.length;[m
+ [m
+[31m-        transactions.push([m
+[31m-            Transaction({to: _to, value: _value, data: _data, executed: false})[m
+[31m-        );[m
+[32m+[m[32m        transactions.push(Transaction({to: _to, value: _value, data: _data, executed: false}));[m
+ [m
+         emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);[m
+     }[m
+[36m@@ -95,4 +87,22 @@[m [mcontract MultiSigWallet {[m
+ [m
+         emit ConfirmTransaction(msg.sender, _txIndex);[m
+     }[m
+[32m+[m
+[32m+[m[32m    function revokeConfirmation(uint256 _txIndex) external onlyOwner {[m
+[32m+[m[32m        if (_txIndex >= transactions.length) {[m
+[32m+[m[32m            revert MultiSigWallet__TxDoesNotExist();[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (!isConfirmed[_txIndex][msg.sender]) {[m
+[32m+[m[32m            revert MultiSigWallet__TxNotConfirmed();[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (transactions[_txIndex].executed) {[m
+[32m+[m[32m            revert MultiSigWallet__TxAlreadyExecuted();[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        isConfirmed[_txIndex][msg.sender] = false;[m
+[32m+[m
+[32m+[m[32m        emit RevokeConfirmation(msg.sender, _txIndex);[m
+[32m+[m[32m    }[m
+ }[m
+[1mdiff --git a/test/MultiSigWallet.t.sol b/test/MultiSigWallet.t.sol[m
+[1mindex 7c727f5..edda768 100644[m
+[1m--- a/test/MultiSigWallet.t.sol[m
+[1m+++ b/test/MultiSigWallet.t.sol[m
+[36m@@ -34,9 +34,7 @@[m [mcontract MultiSigWalletTest is Test {[m
+ [m
+     function test_RevertOnZeroOwners() public {[m
+         address[] memory noOwners;[m
+[31m-        vm.expectRevert([m
+[31m-            MultiSigWallet.MultiSigWallet__EmptyOwnersArray.selector[m
+[31m-        );[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__EmptyOwnersArray.selector);[m
+         wallet = new MultiSigWallet(noOwners, threshold);[m
+     }[m
+ [m
+[36m@@ -56,9 +54,7 @@[m [mcontract MultiSigWalletTest is Test {[m
+ [m
+     function test_RevertOnHighThreshold() public {[m
+         uint256 highThreshold = 5;[m
+[31m-        vm.expectRevert([m
+[31m-            MultiSigWallet.MultiSigWallet__ThresholdTooHigh.selector[m
+[31m-        );[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__ThresholdTooHigh.selector);[m
+         wallet = new MultiSigWallet(owners, highThreshold);[m
+     }[m
+ [m
+[36m@@ -70,12 +66,7 @@[m [mcontract MultiSigWalletTest is Test {[m
+         vm.prank(alice);[m
+         wallet.submitTransaction(to, value, data);[m
+ [m
+[31m-        ([m
+[31m-            address actualTo,[m
+[31m-            uint256 actualValue,[m
+[31m-            bytes memory actualData,[m
+[31m-            bool actualExecuted[m
+[31m-        ) = wallet.transactions(0);[m
+[32m+[m[32m        (address actualTo, uint256 actualValue, bytes memory actualData, bool actualExecuted) = wallet.transactions(0);[m
+ [m
+         assertEq(actualTo, to);[m
+         assertEq(actualValue, value);[m
+[36m@@ -116,9 +107,7 @@[m [mcontract MultiSigWalletTest is Test {[m
+         vm.startPrank(alice);[m
+         wallet.submitTransaction(to, value, data);[m
+         wallet.confirmTransaction(0);[m
+[31m-        vm.expectRevert([m
+[31m-            MultiSigWallet.MultiSigWallet__TxAlreadyConfirmed.selector[m
+[31m-        );[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyConfirmed.selector);[m
+         wallet.confirmTransaction(0);[m
+         vm.stopPrank();[m
+     }[m
+[36m@@ -149,10 +138,80 @@[m [mcontract MultiSigWalletTest is Test {[m
+ [m
+         vm.store(address(wallet), slot, bytes32(uint256(1)));[m
+ [m
+[31m-        vm.expectRevert([m
+[31m-            MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector[m
+[31m-        );[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector);[m
+         vm.prank(alice);[m
+         wallet.confirmTransaction(0);[m
+     }[m
+[32m+[m
+[32m+[m[32m    function test_OwnerCanRevokeAfterConfirming() public {[m
+[32m+[m[32m        address to = makeAddr("RECIEVER");[m
+[32m+[m[32m        uint256 value = 1 ether;[m
+[32m+[m[32m        bytes memory data = "0x";[m
+[32m+[m
+[32m+[m[32m        vm.startPrank(alice);[m
+[32m+[m
+[32m+[m[32m        wallet.submitTransaction(to, value, data);[m
+[32m+[m[32m        wallet.confirmTransaction(0);[m
+[32m+[m
+[32m+[m[32m        assertEq(wallet.isConfirmed(0, alice), true);[m
+[32m+[m
+[32m+[m[32m        vm.expectEmit(true, true, false, false);[m
+[32m+[m[32m        emit MultiSigWallet.RevokeConfirmation(alice, 0);[m
+[32m+[m[32m        wallet.revokeConfirmation(0);[m
+[32m+[m
+[32m+[m[32m        assertEq(wallet.isConfirmed(0, alice), false);[m
+[32m+[m[32m        vm.stopPrank();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    function test_NotConfirmedRevokeReverts() public {[m
+[32m+[m[32m        address to = makeAddr("RECIEVER");[m
+[32m+[m[32m        uint256 value = 1 ether;[m
+[32m+[m[32m        bytes memory data = "0x";[m
+[32m+[m
+[32m+[m[32m        vm.startPrank(alice);[m
+[32m+[m[32m        wallet.submitTransaction(to, value, data);[m
+[32m+[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxNotConfirmed.selector);[m
+[32m+[m[32m        wallet.revokeConfirmation(0);[m
+[32m+[m[32m        vm.stopPrank();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    function test_ExecutedTxCannotBeRevoked() public {[m
+[32m+[m[32m        address to = makeAddr("RECIEVER");[m
+[32m+[m[32m        uint256 value = 1 ether;[m
+[32m+[m[32m        bytes memory data = "0x";[m
+[32m+[m
+[32m+[m[32m        vm.startPrank(alice);[m
+[32m+[m[32m        wallet.submitTransaction(to, value, data);[m
+[32m+[m[32m        wallet.confirmTransaction(0);[m
+[32m+[m
+[32m+[m[32m        bytes32 slot = bytes32(uint256(keccak256(abi.encode(uint256(0)))) + 3);[m
+[32m+[m
+[32m+[m[32m        vm.store(address(wallet), slot, bytes32(uint256(1)));[m
+[32m+[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector);[m
+[32m+[m[32m        wallet.revokeConfirmation(0);[m
+[32m+[m[32m        vm.stopPrank();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    function test_NonexistentTxRevokeReverts() public {[m
+[32m+[m[32m        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxDoesNotExist.selector);[m
+[32m+[m
+[32m+[m[32m        vm.prank(alice);[m
+[32m+[m[32m        wallet.revokeConfirmation(0); // Array is empty, index 0 does not exist[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    function test_NonOwnerRevokeReverts() public {[m
+[32m+[m[32m        address nonOwner = makeAddr("NONOWNER");[m
+[32m+[m[32m        address to = makeAddr("RECIEVER");[m
+[32m+[m[32m        uint256 value = 1 ether;[m
+[32m+[m[32m        bytes memory data = "0x";[m
+[32m+[m
+[32m+[m[32m        vm.prank(alice);[m
+[32m+[m[32m        wallet.submitTransaction(to, value, data);[m
+[32m+[m
+[32m+[m[32m        vm.expectRevert("not owner");[m
+[32m+[m[32m        vm.prank(nonOwner);[m
+[32m+[m[32m        wallet.revokeConfirmation(0);[m
+[32m+[m[32m    }[m
+ }[m
