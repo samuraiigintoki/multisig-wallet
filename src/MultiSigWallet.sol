@@ -144,4 +144,6 @@ contract MultiSigWallet {
             emit ExecuteTransaction(msg.sender, _txIndex);
         }
     }
+
+    receive() external payable {}
 }

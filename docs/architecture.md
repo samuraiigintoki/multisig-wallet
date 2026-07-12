@@ -99,3 +99,17 @@ Events / errors added Day 39:
 Tests added: 6 execute tests (threshold met, nonexistent, threshold not met, already executed, failed call, non-owner). Total suite 22/22 green — verified both in sandbox and user local after user added non-owner test.
 
 Design decision: keep emit inside success branch only. Since failed path reverts, emit would never be reached anyway; placing inside else makes intent explicit.
+
+## Receive flow — implementation note (Day 40)
+
+`receive() external payable {}` is now implemented as the minimal v1 funding path.
+
+Properties:
+- No access control. Any address can fund the wallet.
+- No storage mutation other than native ETH balance increase.
+- No event emitted in v1. Deposit observability relies on transaction history / balance change, not an explicit `Deposit` event.
+- Only empty-calldata ETH transfers hit `receive()`. There is still no `fallback()` function.
+
+Test coverage added Day 40:
+- `test_CanReceiveETH` funds an EOA with `vm.deal`, sends ETH to `address(wallet)` via empty-calldata `.call{value: amount}("")`, asserts call success, and asserts wallet balance increased.
+- Full suite after receive: 23/23 green.

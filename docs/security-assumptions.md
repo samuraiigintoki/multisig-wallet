@@ -147,3 +147,22 @@ This keeps the confirmation lifecycle explicit and auditable. Duplicate confirms
 - Assumption 3: execute now makes the single external call last, after effects.
 - Assumption 6: `executeTransaction` sets executed true before call, and confirm/revoke both revert if executed true.
 - Assumption 7: wallet still needs `receive()` for ETH deposits. Funding via `deal` in tests is placeholder until `receive()` ships.
+
+## Receive path — security notes (Day 40)
+
+**Implementation shipped:** `receive() external payable {}` now allows plain ETH funding without privileged setup or direct storage writes.
+
+**Security properties:**
+- No access control by design. Any address can deposit ETH into the wallet. This is correct for a funding path; deposits do not grant governance rights.
+- No external calls inside `receive()`, so the function itself does not introduce reentrancy surface.
+- No custom accounting variable tracks deposits. Source of truth is `address(this).balance`, which is sufficient for a plain ETH-holding v1 wallet.
+- Because there is no `fallback()` function, non-empty calldata sent to an unknown selector will revert instead of being silently accepted. This narrows accidental deposit surface to plain transfers / empty-calldata calls.
+
+**Residual risks / limitations:**
+- ETH can still be force-sent via `selfdestruct` semantics or other balance-changing mechanisms without hitting `receive()`. Since v1 does not maintain a separate deposit ledger, this does not break internal accounting, but it means there is no event trail for every balance increase.
+- No `Deposit` event means off-chain indexers must infer inbound funding from traces / native transfers rather than contract logs.
+- Execute path still has no explicit insufficient-balance error; an underfunded execution attempt will fail at the low-level call and bubble as `TxExecutionFailed`.
+
+**Assumption 7 status update:**
+- The wallet can now receive ETH via plain transfer / empty-calldata call.
+- Test coverage: `test_CanReceiveETH` proves balance increases through an actual payable call rather than `vm.deal(address(wallet), ...)`.

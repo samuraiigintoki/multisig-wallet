@@ -349,4 +349,15 @@ contract MultiSigWalletTest is Test {
         vm.prank(nonOwner);
         wallet.executeTransaction(0);
     }
+
+    function test_CanReceiveETH() public {
+        uint256 amount = 1 ether;
+        vm.deal(alice, amount);
+
+        vm.prank(alice);
+        (bool success,) = address(wallet).call{value: amount}("");
+
+        assertTrue(success);
+        assertEq(address(wallet).balance, amount);
+    }
 }
