@@ -121,7 +121,6 @@ forge test
 
 ## Known Limitations
 
-- No zero-address owner check.
 - No deposit event.
 - No owner rotation or recovery flow.
 - No `fallback()` function; unknown selectors / non-empty calldata calls revert.

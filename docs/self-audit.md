@@ -17,6 +17,7 @@ Checklist used: `audit-dojo/checklists/personal-checklist-v1.md`
 - **Risk:** A zero-address owner slot is unusable. In a poorly chosen configuration, this can contribute to an unreachable threshold and operationally lock part or all of the wallet approval process.
 - **Current impact:** Low in honest deployment flow, because deployer chooses the owner set and threshold up front.
 - **Recommendation:** Add an explicit zero-address owner check in the constructor, or keep it documented as an accepted v1 limitation if no further code changes are planned.
+- **Resolution Day 41:** Patched. Constructor now reverts with `MultiSigWallet__ZeroAddressOwner` if any element of `_owners` is `address(0)`. Test `test_RevertOnZeroAddressOwner` covers the case. This note is now historical — the check is live.
 
 ## Note 2 — Event Correctness / Observability: `receive()` emits no deposit event
 
@@ -37,4 +38,5 @@ Checklist used: `audit-dojo/checklists/personal-checklist-v1.md`
 ## Conclusion
 
 - Technical Day 40 goals are now represented on disk: `receive()`, receive test, README, and self-audit start.
-- Remaining decision is process, not code: whether to keep these notes as accepted v1 limitations or open a follow-up patch for the zero-address owner validation.
+- Zero-address owner check was patched on Day 41 (constructor reject + test). Notes 2 and 3 remain as accepted v1 limitations (no deposit event, generic execution failure).
+- Self-audit cycle: 1 of 3 notes resolved, 2 accepted as documented v1 scope limits.

@@ -23,6 +23,7 @@ contract MultiSigWallet {
     event RevokeConfirmation(address indexed owner, uint256 indexed txIndex);
     event ExecuteTransaction(address indexed owner, uint256 indexed txIndex);
 
+    error MultiSigWallet__ZeroAddressOwner();
     error MultiSigWallet__EmptyOwnersArray();
     error MultiSigWallet__DuplicateOwner();
     error MultiSigWallet__ZeroThreshold();
@@ -40,10 +41,15 @@ contract MultiSigWallet {
             revert MultiSigWallet__EmptyOwnersArray();
         }
 
+        //zero address check
+
         // Duplicate owner check
         for (uint256 i; i < _owners.length; i++) {
             if (isOwner[_owners[i]]) {
                 revert MultiSigWallet__DuplicateOwner();
+            }
+            if (_owners[i] == address(0)) {
+                revert MultiSigWallet__ZeroAddressOwner();
             } else {
                 owners.push(_owners[i]);
                 isOwner[_owners[i]] = true;

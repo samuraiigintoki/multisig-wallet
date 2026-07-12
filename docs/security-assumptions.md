@@ -166,3 +166,13 @@ This keeps the confirmation lifecycle explicit and auditable. Duplicate confirms
 **Assumption 7 status update:**
 - The wallet can now receive ETH via plain transfer / empty-calldata call.
 - Test coverage: `test_CanReceiveETH` proves balance increases through an actual payable call rather than `vm.deal(address(wallet), ...)`.
+
+## Zero-address owner check — hardening note (Day 41)
+
+**Change:** Constructor now rejects any `_owners` element equal to `address(0)` with a dedicated `MultiSigWallet__ZeroAddressOwner` error.
+
+**Why added:** A zero-address owner slot is operationally unusable. In a poorly chosen configuration, it could contribute to an unreachable threshold and lock the wallet approval process. While the deployer controls the owner set, the cost of this check is negligible (one `== address(0)` comparison per owner), so hardening was chosen over documenting it as a limitation.
+
+**Enforcement location:** Inside the constructor loop, checked after the duplicate-owner guard but before pushing to `owners` and setting `isOwner`.
+
+**Test coverage:** `test_RevertOnZeroAddressOwner` — 4-element owners array (3 valid + 1 zero), expects `ZeroAddressOwner` revert.

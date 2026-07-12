@@ -360,4 +360,19 @@ contract MultiSigWalletTest is Test {
         assertTrue(success);
         assertEq(address(wallet).balance, amount);
     }
+
+    function test_RevertOnZeroAddressOwner() public {
+        address zeroAddress = address(0);
+        owners = new address[](4);
+
+        threshold = 2;
+
+        owners[0] = alice;
+        owners[1] = bob;
+        owners[2] = carry;
+        owners[3] = zeroAddress;
+
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__ZeroAddressOwner.selector);
+        wallet = new MultiSigWallet(owners, threshold);
+    }
 }
