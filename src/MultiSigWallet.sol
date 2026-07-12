@@ -21,6 +21,7 @@ contract MultiSigWallet {
     );
     event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);
     event RevokeConfirmation(address indexed owner, uint256 indexed txIndex);
+    event ExecuteTransaction(address indexed owner, uint256 indexed txIndex);
 
     error MultiSigWallet__EmptyOwnersArray();
     error MultiSigWallet__DuplicateOwner();
@@ -30,6 +31,8 @@ contract MultiSigWallet {
     error MultiSigWallet__TxAlreadyConfirmed();
     error MultiSigWallet__TxAlreadyExecuted();
     error MultiSigWallet__TxNotConfirmed();
+    error MultiSigWallet__TxExecutionFailed();
+    error MultiSigWallet__NotEnoughConfirmations();
 
     constructor(address[] memory _owners, uint256 _threshold) {
         // Zero owners check
@@ -104,5 +107,41 @@ contract MultiSigWallet {
         isConfirmed[_txIndex][msg.sender] = false;
 
         emit RevokeConfirmation(msg.sender, _txIndex);
+    }
+
+    function executeTransaction(uint256 _txIndex) external onlyOwner {
+        // Checks
+        if (_txIndex >= transactions.length) {
+            revert MultiSigWallet__TxDoesNotExist();
+        }
+
+        if (transactions[_txIndex].executed) {
+            revert MultiSigWallet__TxAlreadyExecuted();
+        }
+
+        uint256 count = 0;
+
+        // Strict check here so that it doesn't read last index which is non-existent and would not revert with out of bound error
+        for (uint256 i = 0; i < owners.length; i++) {
+            if (isConfirmed[_txIndex][owners[i]]) {
+                count++;
+            }
+        }
+
+        if (count < threshold) {
+            revert MultiSigWallet__NotEnoughConfirmations();
+        }
+
+        // Effects
+        transactions[_txIndex].executed = true;
+
+        // Interaction
+        (bool success,) =
+            transactions[_txIndex].to.call{value: transactions[_txIndex].value}(transactions[_txIndex].data);
+        if (!success) {
+            revert MultiSigWallet__TxExecutionFailed();
+        } else {
+            emit ExecuteTransaction(msg.sender, _txIndex);
+        }
     }
 }

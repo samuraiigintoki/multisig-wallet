@@ -5,8 +5,15 @@ pragma solidity ^0.8.20;
 import {MultiSigWallet} from "../src/MultiSigWallet.sol";
 import {Test} from "forge-std/Test.sol";
 
+contract RevertingReceiver {
+    fallback() external payable {
+        revert();
+    }
+}
+
 contract MultiSigWalletTest is Test {
     MultiSigWallet public wallet;
+    RevertingReceiver public revertingReceiver;
     address[] owners;
     address public alice = makeAddr("ALICE");
     address public bob = makeAddr("BOB");
@@ -23,6 +30,7 @@ contract MultiSigWalletTest is Test {
         owners[2] = carry;
 
         wallet = new MultiSigWallet(owners, threshold);
+        revertingReceiver = new RevertingReceiver();
     }
 
     function test_DeployWithValidOwnersAndThreshold() public view {
@@ -99,7 +107,7 @@ contract MultiSigWalletTest is Test {
         assertEq(wallet.isConfirmed(0, alice), true);
     }
 
-    function test__DuplicateConfirmReverts() public {
+    function test_DuplicateConfirmReverts() public {
         address to = makeAddr("RECIEVER");
         uint256 value = 1 ether;
         bytes memory data = "0x";
@@ -213,5 +221,132 @@ contract MultiSigWalletTest is Test {
         vm.expectRevert("not owner");
         vm.prank(nonOwner);
         wallet.revokeConfirmation(0);
+    }
+
+    function test_OwnerCanExecuteWhenThresholdMet() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "";
+
+        // to make sure external call doesn't fail with out-of-bound error
+        vm.deal(address(wallet), 1 ether);
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        // hence threshold is 2 , alice & bob confirms transaction.
+        vm.prank(bob);
+        wallet.confirmTransaction(0);
+
+        vm.expectEmit(true, true, false, false);
+        emit MultiSigWallet.ExecuteTransaction(alice, 0);
+
+        vm.prank(alice);
+        wallet.executeTransaction(0);
+
+        (,,, bool executed) = wallet.transactions(0);
+        assertEq(executed, true);
+    }
+
+    function test_NonexistentTxExecuteReverts() public {
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxDoesNotExist.selector);
+
+        vm.prank(alice);
+        wallet.executeTransaction(0);
+    }
+
+    function test_ThresholdNotMetReverts() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "0x";
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__NotEnoughConfirmations.selector);
+
+        vm.prank(alice);
+        wallet.executeTransaction(0);
+    }
+
+    function test_AlreadyExecutedReverts() public {
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "";
+
+        // to make sure external call doesn't fail with out-of-bound error
+        vm.deal(address(wallet), 1 ether);
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        // hence threshold is 2 , alice & bob confirms transaction.
+        vm.prank(bob);
+        wallet.confirmTransaction(0);
+
+        vm.expectEmit(true, true, false, false);
+        emit MultiSigWallet.ExecuteTransaction(alice, 0);
+
+        vm.prank(alice);
+        wallet.executeTransaction(0);
+
+        (,,, bool executed) = wallet.transactions(0);
+        assertEq(executed, true);
+
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxAlreadyExecuted.selector);
+        vm.prank(bob);
+        wallet.executeTransaction(0);
+    }
+
+    function test_FailedExternalCallReverts() public {
+        address to = address(revertingReceiver);
+        uint256 value = 1 ether;
+        bytes memory data = "";
+
+        // to make sure external call doesn't fail with out-of-bound error
+        vm.deal(address(wallet), 1 ether);
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        // hence threshold is 2 , alice & bob confirms transaction.
+        vm.prank(bob);
+        wallet.confirmTransaction(0);
+
+        vm.expectRevert(MultiSigWallet.MultiSigWallet__TxExecutionFailed.selector);
+
+        vm.prank(alice);
+        wallet.executeTransaction(0);
+    }
+
+    function test_NonOwnerExecuteReverts() public {
+        address nonOwner = makeAddr("NONOWNER");
+        address to = makeAddr("RECIEVER");
+        uint256 value = 1 ether;
+        bytes memory data = "";
+
+        // to make sure external call doesn't fail with out-of-bound error
+        vm.deal(address(wallet), 1 ether);
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, value, data);
+        wallet.confirmTransaction(0);
+        vm.stopPrank();
+
+        // hence threshold is 2 , alice & bob confirms transaction.
+        vm.prank(bob);
+        wallet.confirmTransaction(0);
+
+        vm.expectRevert("not owner");
+        vm.prank(nonOwner);
+        wallet.executeTransaction(0);
     }
 }

@@ -71,4 +71,31 @@ The multisig lifecycle has two distinct places where duplicate-action prevention
 
 Without the confirm-flow guard, an owner could call `confirmTransaction` twice on the same tx, inflating the confirmation count without having called `revokeConfirmation` in between. The count would appear to meet the threshold when it shouldn't. This is the same class of bug as reentrancy and unidirectional token accounting — an action that should happen once happening more than once because state is not checked before the effect.
 
-`revokeConfirmation` (future day) will unset `isConfirmed[_txIndex][msg.sender]` and must also be guarded against: cannot revoke if not confirmed, and cannot revoke after execution.
+`revokeConfirmation` unsets `isConfirmed[_txIndex][msg.sender]` and is guarded against: cannot revoke if not confirmed, and cannot revoke after execution.
+
+## Execute flow — implementation note (Day 39)
+
+`executeTransaction(uint256 _txIndex)` is owner-gated via `onlyOwner`. Implements full CEI for first external call in codebase.
+
+Guards (checks):
+1. `_txIndex >= transactions.length` → `TxDoesNotExist`
+2. `transactions[_txIndex].executed == true` → `TxAlreadyExecuted`
+3. Derived count: loop `owners` array, for each `owners[i]` check `isConfirmed[_txIndex][owners[i]]`, increment count. This is Option A — no cached count storage, avoids divergence risk. Gas O(n) where n = owners.length (3 in tests, trivial). Matches assumption #4.
+4. `count < threshold` → `NotEnoughConfirmations`
+
+Effects:
+- `transactions[_txIndex].executed = true` set **before** external call. This is CEI core — prevents reentrancy from re-executing same txIndex.
+
+Interactions:
+- `(bool success, ) = transactions[_txIndex].to.call{value: transactions[_txIndex].value}(transactions[_txIndex].data)`
+- If `!success` → revert `TxExecutionFailed`. On revert, whole transaction reverts, so `executed` flag rollback to false — no half-executed state.
+- On success, emit `ExecuteTransaction(msg.sender, _txIndex)`
+
+Events / errors added Day 39:
+- `ExecuteTransaction(address indexed owner, uint256 indexed txIndex)`
+- `NotEnoughConfirmations`
+- `TxExecutionFailed`
+
+Tests added: 6 execute tests (threshold met, nonexistent, threshold not met, already executed, failed call, non-owner). Total suite 22/22 green — verified both in sandbox and user local after user added non-owner test.
+
+Design decision: keep emit inside success branch only. Since failed path reverts, emit would never be reached anyway; placing inside else makes intent explicit.

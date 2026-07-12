@@ -115,3 +115,35 @@ Confirmations are modeled as a per-transaction per-owner boolean:
 - Revoke is intentionally strict, not idempotent: calling `revokeConfirmation` while already unconfirmed reverts with `TxNotConfirmed`.
 
 This keeps the confirmation lifecycle explicit and auditable. Duplicate confirms are rejected, empty revokes are rejected, and finalized transactions are immutable with respect to confirmation state.
+
+## Execute flow — security notes (Day 39)
+
+**Implementation shipped:** `executeTransaction` now exists, replacing future-day placeholders in assumptions 3, 6, 7.
+
+**CEI enforcement:**
+- Checks: tx exists, not executed, derived confirmation count >= threshold.
+- Effects: `executed = true` before external call. Prevents reentrancy double-execution: a malicious callee that calls back `executeTransaction` same index would hit `TxAlreadyExecuted` guard.
+- Interactions: single low-level `.call{value: value}(data)` to stored `to`. No other external calls in function.
+
+**Failure atomicity:**
+- External call failure reverts with `TxExecutionFailed`. Because `executed = true` write happened earlier in same tx, revert rolls it back to false. No stuck executed-but-failed state. Verified by `test_FailedExternalCallReverts` asserting `executed == false` after revert.
+
+**Confirmation counting (Option A derived):**
+- Loop through `owners` array, count `isConfirmed[txIndex][owner]`. No cached `confirmationCount` storage field. Therefore no divergence bug where count mapping and `isConfirmed` disagree. This enforces assumption #4 as code, not just doc. Gas trade-off: O(n) read, acceptable for n <= ~10 typical multisig owners. For v1, correctness > gas.
+
+**Threshold check:**
+- Requires `count >= threshold`, not `==`. Allows extra confirmations beyond threshold (e.g., 3 confirms in 2-of-3) without blocking execution.
+
+**Access control:**
+- `onlyOwner` modifier reused. Non-owner execution reverts with `not owner` string (same as submit/confirm/revoke). Tested.
+
+**Residual risks still open (not fixed Day 39):**
+- No `receive()` yet, so wallet cannot receive ETH via plain transfer — tests use `vm.deal` to fund. `receive()` is next slice.
+- ETH value forwarding relies on wallet balance; insufficient balance causes call to fail (wrapped as `TxExecutionFailed`, not explicit `InsufficientBalance`).
+- No reentrancy guard modifier; protection relies solely on CEI flag + revert-on-failure. Sufficient for single-external-call function, but if future functions add external calls, need to revisit.
+- `executeTransaction` emits only on success path; failure path reverts so no event. Intentional.
+
+**Updated enforcement for assumptions 3, 6, 7:**
+- Assumption 3: execute now makes the single external call last, after effects.
+- Assumption 6: `executeTransaction` sets executed true before call, and confirm/revoke both revert if executed true.
+- Assumption 7: wallet still needs `receive()` for ETH deposits. Funding via `deal` in tests is placeholder until `receive()` ships.
