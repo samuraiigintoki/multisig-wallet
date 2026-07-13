@@ -33,6 +33,7 @@
 - `constructor(address[] memory _owners, uint256 _threshold)`
   - initializes owners
   - rejects empty owners array
+  - rejects zero-address owners
   - rejects duplicate owners
   - rejects zero threshold
   - rejects threshold greater than owner count
@@ -97,7 +98,7 @@
 
 ## Test Status
 
-- Full suite currently: **23 / 23 passing**
+- Full suite currently: **24 / 24 passing**
 
 ## How to Run
 
@@ -112,6 +113,7 @@ forge test
 - `test/MultiSigWallet.t.sol`
 - `docs/architecture.md`
 - `docs/security-assumptions.md`
+- `docs/self-audit.md`
 
 ## Design Tradeoffs
 
