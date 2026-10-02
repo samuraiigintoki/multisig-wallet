@@ -95,10 +95,11 @@
 - revoke flow tests
 - execute flow tests
 - receive ETH test
+- owner array and transaction count getter tests
 
 ## Test Status
 
-- Full suite currently: **24 / 24 passing**
+- Full suite currently: **26 / 26 passing**
 
 ## How to Run
 

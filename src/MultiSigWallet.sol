@@ -151,5 +151,19 @@ contract MultiSigWallet {
         }
     }
 
+    // The auto-generated getter for a public array is index-only:
+    // owners(uint256) and transactions(uint256). Solidity never generates a
+    // length getter, so an off-chain reader had no way to read the owner set or
+    // the transaction count without probing indexes until a revert. Both are
+    // plain reads over existing state, and no storage slot or existing function
+    // changes.
+    function getOwners() external view returns (address[] memory) {
+        return owners;
+    }
+
+    function getTransactionCount() external view returns (uint256) {
+        return transactions.length;
+    }
+
     receive() external payable {}
 }

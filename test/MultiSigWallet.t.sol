@@ -375,4 +375,35 @@ contract MultiSigWalletTest is Test {
         vm.expectRevert(MultiSigWallet.MultiSigWallet__ZeroAddressOwner.selector);
         wallet = new MultiSigWallet(owners, threshold);
     }
+
+    function test_GetOwnersReturnsEveryOwnerInConstructorOrder() public view {
+        address[] memory expected = owners;
+
+        assertEq(wallet.getOwners(), expected);
+
+        // The array getter and the generated index getter must agree.
+        for (uint256 i; i < expected.length; i++) {
+            assertEq(wallet.getOwners()[i], wallet.owners(i));
+        }
+    }
+
+    function test_GetTransactionCountStartsAtZeroAndTracksSubmissions() public {
+        address to = makeAddr("RECIEVER");
+
+        assertEq(wallet.getTransactionCount(), 0);
+
+        vm.startPrank(alice);
+        wallet.submitTransaction(to, 1 ether, "");
+        assertEq(wallet.getTransactionCount(), 1);
+        wallet.submitTransaction(to, 2 ether, "");
+        vm.stopPrank();
+
+        assertEq(wallet.getTransactionCount(), 2);
+
+        // The count is the array length, so the highest valid index is count - 1.
+        (address firstTo,,,) = wallet.transactions(0);
+        (address secondTo,,,) = wallet.transactions(wallet.getTransactionCount() - 1);
+        assertEq(firstTo, to);
+        assertEq(secondTo, to);
+    }
 }
